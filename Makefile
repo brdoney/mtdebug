@@ -8,8 +8,11 @@ run-demo: demo libc-intercept
 libc-intercept: tlv-client.o libc-intercept.c
 	$(CC) -shared -o libc-intercept.so tlv-client.o libc-intercept.c -ldl
 
-demo: demo.c
-	gcc -ggdb3 -o demo demo.c -pthread
+demo: examples/demo.c
+	gcc -ggdb3 -o demo examples/demo.c -pthread
+
+multithread-demo: examples/multithread-demo.c
+	gcc -ggdb3 -o multithread-demo examples/multithread-demo.c -pthread
 
 clean:
 	rm -f demo tlv-client.o libc-intercept.so
