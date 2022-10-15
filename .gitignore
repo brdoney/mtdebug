@@ -236,3 +236,6 @@ dkms.conf
 
 # GDB
 .gdb_history
+
+# Binaries
+demo

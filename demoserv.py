@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request
+import os
+from flask import Flask, request, send_from_directory
 from pygdbmi.gdbcontroller import GdbController
 from tlv_server import recv_tlv
 import threading
@@ -17,17 +18,25 @@ def tlv_server_thread():
         tlv_lock.release()
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="./frontend/build/")
 
 # Start up pygdmi
 gdbmi = GdbController()
 
 
-@app.route("/")
-def input():
-    # use POST for commands - take an argument (command), run it, then give all
-    # output back to host
-    return render_template("input-command.html")
+# Serve React App
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve(path):
+    if app.static_folder is None:
+        raise Exception(
+            "static folder was not set; must point to frontend build directory"
+        )
+
+    if path != "" and os.path.exists(app.static_folder + "/" + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, "index.html")
 
 
 @app.route("/output", methods=["POST"])
