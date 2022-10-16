@@ -1,11 +1,16 @@
 import os
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, send_from_directory, json
 from pygdbmi.gdbcontroller import GdbController
 from tlv_server import recv_tlv
 import threading
+from typing import Any, cast
+from werkzeug.exceptions import HTTPException, InternalServerError
 
 tlv_lock = threading.Lock()
 tlv_messages = []
+
+# Type that describes a parsed response from pygdmi
+GdbResponse = list[dict[str, Any]]
 
 
 def tlv_server_thread():
@@ -24,6 +29,23 @@ app = Flask(__name__, static_folder="./frontend/build/")
 gdbmi = GdbController()
 
 
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """Return JSON instead of HTML for HTTP errors."""
+    # start with the correct headers and status code from the error
+    response = e.get_response()
+    # replace the body with JSON
+    response.data = json.dumps(
+        {
+            "code": e.code,
+            "name": e.name,
+            "description": e.description,
+        }
+    )
+    response.content_type = "application/json"
+    return response
+
+
 # Serve React App
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
@@ -39,27 +61,42 @@ def serve(path):
         return send_from_directory(app.static_folder, "index.html")
 
 
-@app.route("/output", methods=["POST"])
+@app.route("/api/output", methods=["POST"])
 def output():
     input = request.form["command"]
     output = "invalid command"
     if input == "start":
-        output = to_stdout(gdbmi.write("-file-exec-and-symbols a.out"))
+        output = to_stdout(gdbmi.write("-file-exec-and-symbols multithread-demo"))
+        gdbmi.write("b 29")
     elif input == "run":
         output = to_stdout(gdbmi.write("-exec-run"))
+    elif input == "variables":
+        print(request.form)
+        tid = request.form["thread"]
+        output = gdbmi.write(
+            f"-stack-list-variables --thread {tid} --frame 0 --all-values"
+        )
     return output
 
 
 # look for messages to stdout
 def to_stdout(response):
     output = ""
-    for json in response:
-        if json["stream"] == "stdout" and json["message"] is not None:
-            output = output + json["message"] + "<br>"
+    for msg in response:
+        if msg["stream"] == "stdout" and msg["message"] is not None:
+            output = output + msg["message"] + "<br>"
     return output
 
 
-@app.route("/msg")
+@app.route("/api/threads")
+def threads():
+    res = cast(GdbResponse, gdbmi.write("-thread-info"))[0]
+    if res["message"] != "done":
+        raise InternalServerError("Could not fetch threads")
+    return res["payload"]["threads"]
+
+
+@app.route("/api/msg")
 def messages():
     tlv_lock.acquire()
     if len(tlv_messages) > 0:
