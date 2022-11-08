@@ -1,16 +1,19 @@
 import os
 from flask import Flask, request, send_from_directory, json
-from pygdbmi.gdbcontroller import GdbController
+
+# from pygdbmi.gdbcontroller import GdbController
+from gdb_websocket import GdbController
 from tlv_server import recv_tlv
 import threading
-from typing import Any, cast
+from typing import Any, Optional, cast
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 tlv_lock = threading.Lock()
 tlv_messages = []
 
 # Type that describes a parsed response from pygdmi
-GdbResponse = list[dict[str, Any]]
+GdbResponseEntry = dict[str, Any]
+GdbResponse = list[GdbResponseEntry]
 
 
 def tlv_server_thread():
@@ -24,6 +27,7 @@ def tlv_server_thread():
 
 
 app = Flask(__name__, static_folder="./frontend/build/")
+app.debug = True
 
 # Start up pygdmi
 gdbmi = GdbController()
@@ -81,6 +85,7 @@ def output():
 
 # look for messages to stdout
 def to_stdout(response):
+    print("Getting stdout:", response)
     output = ""
     for msg in response:
         if msg["stream"] == "stdout" and msg["message"] is not None:
@@ -88,10 +93,21 @@ def to_stdout(response):
     return output
 
 
+def get_result(response: GdbResponse) -> Optional[GdbResponseEntry]:
+    print("Getting result:", response)
+    for msg in response:
+        if msg["type"] == "result":
+            return msg
+    return None
+
+
 @app.route("/api/threads")
 def threads():
-    res = cast(GdbResponse, gdbmi.write("-thread-info"))[0]
-    if res["message"] != "done":
+    all_res = gdbmi.write("-thread-info")
+    res = cast(GdbResponse, all_res)
+    res = get_result(res)
+    if res is None:
+        print(all_res, res)
         raise InternalServerError("Could not fetch threads")
     return res["payload"]["threads"]
 
@@ -108,9 +124,12 @@ def messages():
     return str(val)
 
 
-# Start the thread that receives updates from the libc interception c code
-tlv_thread = threading.Thread(target=tlv_server_thread)
-tlv_thread.start()
+@app.before_first_request
+def start_threads():
+    # Start the thread that receives updates from the libc interception c code
+    tlv_thread = threading.Thread(target=tlv_server_thread)
+    tlv_thread.start()
+
 
 # Start the flask server
 app.run()
