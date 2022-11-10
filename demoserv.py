@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request, send_from_directory, json
+from pygdbmi.constants import GdbTimeoutError
 
 # from pygdbmi.gdbcontroller import GdbController
 from gdb_websocket import GdbController
@@ -8,12 +9,18 @@ import threading
 from typing import Any, Optional, cast
 from werkzeug.exceptions import HTTPException, InternalServerError
 
+import asyncio
+from websockets import server as wsserver
+
 tlv_lock = threading.Lock()
 tlv_messages = []
 
 # Type that describes a parsed response from pygdmi
 GdbResponseEntry = dict[str, Any]
 GdbResponse = list[GdbResponseEntry]
+
+# Port for websocket used for communicating to GDB TUI
+WEBSOCKET_PORT = 5001
 
 
 def tlv_server_thread():
@@ -65,13 +72,13 @@ def serve(path):
         return send_from_directory(app.static_folder, "index.html")
 
 
-@app.route("/api/output", methods=["POST"])
+@app.post("/api/output")
 def output():
     input = request.form["command"]
     output = "invalid command"
     if input == "start":
         output = to_stdout(gdbmi.write("-file-exec-and-symbols multithread-demo"))
-        gdbmi.write("b 29")
+        gdbmi.write("b 27")
     elif input == "run":
         output = to_stdout(gdbmi.write("-exec-run"))
     elif input == "variables":
@@ -94,7 +101,6 @@ def to_stdout(response):
 
 
 def get_result(response: GdbResponse) -> Optional[GdbResponseEntry]:
-    print("Getting result:", response)
     for msg in response:
         if msg["type"] == "result":
             return msg
@@ -122,6 +128,52 @@ def messages():
     tlv_lock.release()
 
     return str(val)
+
+
+async def watch_gdb(ws) -> None:
+    while True:
+        try:
+            res: bytes | str = await asyncio.wait_for(ws.recv(), 1)
+
+            # If we had a string frame (not a byte frame), then have to encode to bytes
+            if isinstance(res, str):
+                res = str.encode(res, "ascii")
+            print("in:", res, type(res))
+
+            # Send the user input to the GDB TUI instance
+            gdbmi.write(res, using_mi=False)
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            output = gdbmi.read(using_mi=False)
+            print("out:", output)
+
+            # Send the TUI output to the frontend for rendering
+            await ws.send(output)
+        except GdbTimeoutError:
+            pass
+
+
+async def serve_gdb():
+    async with wsserver.serve(
+        watch_gdb, "localhost", WEBSOCKET_PORT, reuse_address=True, reuse_port=True
+    ):
+        print(f"Serving {WEBSOCKET_PORT}")
+        await asyncio.Future()  # run forever
+
+
+def start_serve_websocket():
+    asyncio.run(serve_gdb())
+
+
+@app.get("/api/websocket")
+def websocket():
+    """API endpoint to start a websocket and get its port (we should eventually switch
+    to full addresses)."""
+    ws_thread = threading.Thread(target=start_serve_websocket)
+    ws_thread.start()
+    return {"port": WEBSOCKET_PORT}
 
 
 @app.before_first_request

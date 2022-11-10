@@ -1,12 +1,12 @@
 import io
 import os
 import pty
-import signal
+from select import select
 import subprocess
 from typing import cast
 
 from pygdbmi.gdbcontroller import DEFAULT_GDB_LAUNCH_COMMAND
-from pygdbmi.constants import DEFAULT_GDB_TIMEOUT_SEC
+from pygdbmi.constants import DEFAULT_GDB_TIMEOUT_SEC, GdbTimeoutError
 from pygdbmi.IoManager import IoManager
 
 
@@ -16,20 +16,19 @@ class GdbController:
 
     # stdin/out that the gdb instance is using (really just a pseudoterminal)
     # Writing and reading may seem flipped, but remember we are observing the pty
-    tui_stdin: io.BufferedWriter
-    tui_stdout: io.BufferedReader
-
-    # # Pty information for console input/output (os opposed to MI)
-    # tui_pty_master: int
-    # tui_pty_slave: int
+    tui_stdin: io.FileIO
+    tui_stdout: io.FileIO
 
     def __init__(self) -> None:
         self.tui_pty_master, self.tui_pty_slave = pty.openpty()
         gdb_tui_tty_name = os.ttyname(self.tui_pty_slave)
+        gdb_tui_pty_name = os.ttyname(self.tui_pty_master)
+        print(gdb_tui_pty_name, gdb_tui_tty_name)
 
-        self.tui_stdin = os.fdopen(self.tui_pty_master, mode="wb")
-        self.tui_stdout = os.fdopen(self.tui_pty_master, mode="rb")
+        self.tui_stdin = os.fdopen(self.tui_pty_master, mode="wb", buffering=0)
+        self.tui_stdout = os.fdopen(self.tui_pty_master, mode="rb", buffering=0)
 
+        # Need to start separate TUI on startup + some QOL improvements
         startup_commands = [
             f"new-ui console {gdb_tui_tty_name}",
             "set pagination off",
@@ -37,8 +36,8 @@ class GdbController:
         ]
         startup_commands_str = [f"-iex={c}" for c in startup_commands]
         command = [*DEFAULT_GDB_LAUNCH_COMMAND, *startup_commands_str]
-        command = DEFAULT_GDB_LAUNCH_COMMAND
 
+        # Talk to GDB MI through pipes (like pygdbmi)
         self.gdb_process = subprocess.Popen(
             command,
             shell=False,
@@ -70,7 +69,20 @@ class GdbController:
         """
         if using_mi:
             return self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
-        return self.tui_stdout.read()
+
+        # Wait for at most `timeout_sec` to read from stdout
+        r, _, _ = select([self.tui_stdout], [], [], timeout_sec)
+
+        if self.tui_stdout in r:
+            # If there are bytes ready, this will just return them
+            # (won't wait for full 1024)
+            return self.tui_stdout.read(1024)
+        elif raise_error_on_timeout:
+            raise GdbTimeoutError(
+                "Did not get response from gdb after %s seconds" % timeout_sec
+            )
+        else:
+            return None
 
     def write(
         self,
@@ -94,11 +106,12 @@ class GdbController:
                 raise_error_on_timeout,
                 read_response,
             )
-        # It's only a list of commands if we're using MI, but we're not
+
+        # We only accept one command (as bytes) at a time for TUI
         data = cast(bytes, data)
-        return self.tui_stdin.write(data)
 
+        print("Writing:", data)
+        bytes_written = self.tui_stdin.write(data)
+        print(bytes_written)
 
-# async def watch_gdb(gdb: IoManager) -> None:
-#     while True:
-#         gdb._buffer_incomplete_responses
+        return bytes_written

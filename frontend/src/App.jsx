@@ -1,9 +1,12 @@
 import "./App.css";
+import GDBTerminal from "./Terminal";
 import ThreadPicker from "./ThreadPicker";
 
 function App() {
   return (
     <div className="App">
+      <GDBTerminal class="terminal" />
+
       <form className="command-form" action="/api/output" method="POST">
         <ThreadPicker />
         <label>
