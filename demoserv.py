@@ -1,13 +1,14 @@
 import os
-from flask import Flask, request, send_from_directory, json
-from pygdbmi.constants import GdbTimeoutError
+from typing import Any, Optional, cast
+import threading
+import linecache
 
-# from pygdbmi.gdbcontroller import GdbController
 from gdb_websocket import GdbController
 from tlv_server import recv_tlv
-import threading
-from typing import Any, Optional, cast
-from werkzeug.exceptions import HTTPException, InternalServerError
+
+from flask import Flask, request, send_from_directory, json, jsonify
+from werkzeug.exceptions import HTTPException
+from pygdbmi.constants import GdbTimeoutError
 
 import asyncio
 from websockets import server as wsserver
@@ -73,31 +74,54 @@ def serve(path):
 
 
 @app.post("/api/output")
-def output():
-    input = request.form["command"]
-    output = "invalid command"
-    if input == "start":
-        output = to_stdout(gdbmi.write("-file-exec-and-symbols multithread-demo"))
-        gdbmi.write("b 27")
-    elif input == "run":
-        output = to_stdout(gdbmi.write("-exec-run"))
-    elif input == "variables":
+def gdbmi_output():
+    """Handle post requests from react"""
+    input = request.form["submit"]
+    output = []
+    if input == "start":  # start gdb execution, set breakpoint on main
+        gdbmi.write("-file-exec-and-symbols multithread-demo")
+        gdbmi.write("b main")
+        output = gdbmi.write("-exec-run")
+    elif input == "variables":   # variables command (to be deprecated)
         print(request.form)
         tid = request.form["thread"]
         output = gdbmi.write(
             f"-stack-list-variables --thread {tid} --frame 0 --all-values"
         )
+    elif input == "step":
+        output = gdbmi.write("-exec-step")
+    elif input == "breakpoint":
+        input = request.form["breakpoint"]   # get line to break at
+        output = gdbmi.write("b " + input)
+    elif input == "continue":
+        output = gdbmi.write("-exec-continue")
+    elif input == "stop":
+        output = gdbmi.write("-exec-return")
     return output
 
 
-# look for messages to stdout
-def to_stdout(response):
-    print("Getting stdout:", response)
-    output = ""
-    for msg in response:
-        if msg["stream"] == "stdout" and msg["message"] is not None:
-            output = output + msg["message"] + "<br>"
-    return output
+@app.get("/api/step")
+def step_info():
+    """Stepping command, steps for whole program."""
+    line = ""
+    num = -1
+    try:
+        # get stack frame info
+        res = cast(GdbResponse, gdbmi.write("-stack-info-frame"))[0]
+        frame = {}
+        line = ""
+
+        # print current line of execution
+        if res["message"] != "error":
+            frame = res["payload"]["frame"]
+            num = int(frame["line"])
+            line = linecache.getline("./examples/multithread-demo.c", num)
+    except Exception:
+        # TODO: Slim down what we're catching to just be what is raised
+        # command not running
+        line = ""
+        num = -1
+    return jsonify(curr_line=line, line_num=num)
 
 
 def get_result(response: GdbResponse) -> Optional[GdbResponseEntry]:
@@ -109,12 +133,30 @@ def get_result(response: GdbResponse) -> Optional[GdbResponseEntry]:
 
 @app.route("/api/threads")
 def threads():
+    """Get info about threads."""
     all_res = gdbmi.write("-thread-info")
     res = cast(GdbResponse, all_res)
     res = get_result(res)
     if res is None:
         print(all_res, res)
+
+    """
+    threads = res["payload"]["threads"]
+    if res["message"] != "done":
         raise InternalServerError("Could not fetch threads")
+    if res["payload"]["threads"] != []:
+        for thread in threads:
+            curr_vars = []
+            tid = int(thread["id"])
+            output = cast(GdbResponse, gdbmi.write(
+            f"-stack-list-variables --thread {tid} --frame 0 --all-values"))[0]
+            output_list = output["payload"]["variables"]
+            for vars in output_list:
+                for var in vars:
+                    if var != 'none':
+                        curr_vars.append(var)
+            json_threads.append({"tid":tid, "vars": curr_vars, "target-id":thread["target-id"]})
+    """
     return res["payload"]["threads"]
 
 
@@ -184,4 +226,5 @@ def start_threads():
 
 
 # Start the flask server
-app.run()
+if __name__ == "__main__":
+    app.run()

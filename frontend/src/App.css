@@ -6,6 +6,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  gap: 10px;
 }
 
 .terminal {
@@ -14,12 +15,19 @@ body {
 
 .command-form {
   text-align: center;
-  height: 30vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: white;
   gap: 10px;
+}
+
+code {
+  background-color:black;
+  box-sizing:border-box;
+  min-height:fit-content;
+  border: 4px solid white;
+  padding: 10px;
 }
 
