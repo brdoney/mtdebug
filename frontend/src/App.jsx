@@ -1,16 +1,28 @@
 import "./App.css";
 import ThreadPicker from "./ThreadPicker";
+import Step from "./Step";
 
 function App() {
+
   return (
     <div className="App">
-      <form className="command-form" action="/api/output" method="POST">
+      <iframe title="command submission" name="command-frame" style={{display:'none',}}></iframe>
+      <form className="command-form" action="/api/output" method="POST" target="command-frame">
         <ThreadPicker />
+        <Step />
         <label>
-          Enter Command: <input type="text" name="command" />
+          Enter breakpoint: <input type="text" name="breakpoint"/>
         </label>
         <div>
-          <input type="submit" value="Submit" />
+          <button name="submit" value="breakpoint">submit</button>
+        <div>
+          <p>Click below to start GDB execution of program with breakpoint on main:</p>
+          <button name="submit" value="start" > start</button>
+        </div>
+        <div>
+          <p>Select a thread and click to view local variables</p>
+          <button name="submit" value="variables" >variables</button>
+        </div>
         </div>
       </form>
     </div>

@@ -1,10 +1,11 @@
 import os
-from flask import Flask, request, send_from_directory, json
+from flask import Flask, request, send_from_directory, json,jsonify
 from pygdbmi.gdbcontroller import GdbController
 from tlv_server import recv_tlv
 import threading
 from typing import Any, cast
 from werkzeug.exceptions import HTTPException, InternalServerError
+import linecache
 
 tlv_lock = threading.Lock()
 tlv_messages = []
@@ -60,39 +61,88 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, "index.html")
 
-
+# handle post requests from react
 @app.route("/api/output", methods=["POST"])
-def output():
-    input = request.form["command"]
-    output = "invalid command"
-    if input == "start":
-        output = to_stdout(gdbmi.write("-file-exec-and-symbols multithread-demo"))
-        gdbmi.write("b 29")
-    elif input == "run":
-        output = to_stdout(gdbmi.write("-exec-run"))
-    elif input == "variables":
+def gdbmi_output():
+    input = request.form["submit"]
+    # input_array = input.split(" ")
+    output = []
+    if input == "start":  # start gdb execution, set breakpoint on main
+        gdbmi.write("-file-exec-and-symbols multithread-demo")
+        gdbmi.write("b main")
+        output = gdbmi.write("-exec-run")
+    elif input == "variables":   # variables command (to be deprecated)
         print(request.form)
         tid = request.form["thread"]
         output = gdbmi.write(
             f"-stack-list-variables --thread {tid} --frame 0 --all-values"
         )
+    elif input == "step":
+        output = gdbmi.write("-exec-step")
+    elif input == "breakpoint":
+        input = request.form["breakpoint"]   # get line to break at
+        output = gdbmi.write("b " + input)
+    elif input == "continue":
+        output = gdbmi.write("-exec-continue")
+    elif input == "stop":
+        output = gdbmi.write("-exec-return")
     return output
 
+# stepping command, steps for whole program
+@app.route("/api/step")
+def step_info():
+    line = ""
+    num = -1
+    try:
+        # get stack frame info
+        res = cast(GdbResponse, gdbmi.write("-stack-info-frame"))[0]
+        frame = {}
+        line = ""
 
-# look for messages to stdout
+        # print current line of execution
+        if res["message"] != "error":
+            frame = res["payload"]["frame"]
+            num = int(frame["line"])
+            line = linecache.getline("demo-multithread.c", num)
+    except:
+        # command not running
+        line = ""
+        num = -1
+    return jsonify(curr_line=line, line_num = num)
+
+"""
+@app.route("/api/variables")
 def to_stdout(response):
-    output = ""
-    for msg in response:
-        if msg["stream"] == "stdout" and msg["message"] is not None:
-            output = output + msg["message"] + "<br>"
+    print(request.form)
+    tid = request.form["thread"]
+    output = gdbmi.write(
+        f"-stack-list-variables --thread {tid} --frame 0 --all-values"
+    )
     return output
+"""
 
-
+# get info about threads
 @app.route("/api/threads")
 def threads():
+    json_threads = []
     res = cast(GdbResponse, gdbmi.write("-thread-info"))[0]
+    """
+    threads = res["payload"]["threads"]
     if res["message"] != "done":
         raise InternalServerError("Could not fetch threads")
+    if res["payload"]["threads"] != []:
+        for thread in threads:
+            curr_vars = []
+            tid = int(thread["id"])
+            output = cast(GdbResponse, gdbmi.write(
+            f"-stack-list-variables --thread {tid} --frame 0 --all-values"))[0]
+            output_list = output["payload"]["variables"]
+            for vars in output_list:
+                for var in vars:
+                    if var != 'none':
+                        curr_vars.append(var)
+            json_threads.append({"tid":tid, "vars": curr_vars, "target-id":thread["target-id"]})
+    """
     return res["payload"]["threads"]
 
 
@@ -113,4 +163,5 @@ tlv_thread = threading.Thread(target=tlv_server_thread)
 tlv_thread.start()
 
 # Start the flask server
-app.run()
+if __name__=="__main__":
+    app.run()
