@@ -236,3 +236,10 @@ dkms.conf
 
 # GDB
 .gdb_history
+
+# gdbmi API file for testing
+pygdmi-demo.py
+
+# Binaries
+demo
+multithread-demo
