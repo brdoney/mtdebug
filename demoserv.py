@@ -1,17 +1,27 @@
 import os
-from flask import Flask, request, send_from_directory, json,jsonify
-from pygdbmi.gdbcontroller import GdbController
-from tlv_server import recv_tlv
+from typing import Any, Optional, cast
 import threading
-from typing import Any, cast
-from werkzeug.exceptions import HTTPException, InternalServerError
 import linecache
+
+from gdb_websocket import GdbController
+from tlv_server import recv_tlv
+
+from flask import Flask, request, send_from_directory, json, jsonify
+from werkzeug.exceptions import HTTPException
+from pygdbmi.constants import GdbTimeoutError
+
+import asyncio
+from websockets import server as wsserver
 
 tlv_lock = threading.Lock()
 tlv_messages = []
 
 # Type that describes a parsed response from pygdmi
-GdbResponse = list[dict[str, Any]]
+GdbResponseEntry = dict[str, Any]
+GdbResponse = list[GdbResponseEntry]
+
+# Port for websocket used for communicating to GDB TUI
+WEBSOCKET_PORT = 5001
 
 
 def tlv_server_thread():
@@ -25,6 +35,7 @@ def tlv_server_thread():
 
 
 app = Flask(__name__, static_folder="./frontend/build/")
+app.debug = True
 
 # Start up pygdmi
 gdbmi = GdbController()
@@ -61,11 +72,11 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, "index.html")
 
-# handle post requests from react
-@app.route("/api/output", methods=["POST"])
+
+@app.post("/api/output")
 def gdbmi_output():
+    """Handle post requests from react"""
     input = request.form["submit"]
-    # input_array = input.split(" ")
     output = []
     if input == "start":  # start gdb execution, set breakpoint on main
         gdbmi.write("-file-exec-and-symbols multithread-demo")
@@ -88,9 +99,10 @@ def gdbmi_output():
         output = gdbmi.write("-exec-return")
     return output
 
-# stepping command, steps for whole program
-@app.route("/api/step")
+
+@app.get("/api/step")
 def step_info():
+    """Stepping command, steps for whole program."""
     line = ""
     num = -1
     try:
@@ -103,29 +115,31 @@ def step_info():
         if res["message"] != "error":
             frame = res["payload"]["frame"]
             num = int(frame["line"])
-            line = linecache.getline("demo-multithread.c", num)
-    except:
+            line = linecache.getline("./examples/multithread-demo.c", num)
+    except Exception:
+        # TODO: Slim down what we're catching to just be what is raised
         # command not running
         line = ""
         num = -1
-    return jsonify(curr_line=line, line_num = num)
+    return jsonify(curr_line=line, line_num=num)
 
-"""
-@app.route("/api/variables")
-def to_stdout(response):
-    print(request.form)
-    tid = request.form["thread"]
-    output = gdbmi.write(
-        f"-stack-list-variables --thread {tid} --frame 0 --all-values"
-    )
-    return output
-"""
 
-# get info about threads
+def get_result(response: GdbResponse) -> Optional[GdbResponseEntry]:
+    for msg in response:
+        if msg["type"] == "result":
+            return msg
+    return None
+
+
 @app.route("/api/threads")
 def threads():
-    json_threads = []
-    res = cast(GdbResponse, gdbmi.write("-thread-info"))[0]
+    """Get info about threads."""
+    all_res = gdbmi.write("-thread-info")
+    res = cast(GdbResponse, all_res)
+    res = get_result(res)
+    if res is None:
+        print(all_res, res)
+
     """
     threads = res["payload"]["threads"]
     if res["message"] != "done":
@@ -158,10 +172,59 @@ def messages():
     return str(val)
 
 
-# Start the thread that receives updates from the libc interception c code
-tlv_thread = threading.Thread(target=tlv_server_thread)
-tlv_thread.start()
+async def watch_gdb(ws) -> None:
+    while True:
+        try:
+            res: bytes | str = await asyncio.wait_for(ws.recv(), 1)
+
+            # If we had a string frame (not a byte frame), then have to encode to bytes
+            if isinstance(res, str):
+                res = str.encode(res, "ascii")
+            print("in:", res, type(res))
+
+            # Send the user input to the GDB TUI instance
+            gdbmi.write(res, using_mi=False)
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            output = gdbmi.read(using_mi=False)
+            print("out:", output)
+
+            # Send the TUI output to the frontend for rendering
+            await ws.send(output)
+        except GdbTimeoutError:
+            pass
+
+
+async def serve_gdb():
+    async with wsserver.serve(
+        watch_gdb, "localhost", WEBSOCKET_PORT, reuse_address=True, reuse_port=True
+    ):
+        print(f"Serving {WEBSOCKET_PORT}")
+        await asyncio.Future()  # run forever
+
+
+def start_serve_websocket():
+    asyncio.run(serve_gdb())
+
+
+@app.get("/api/websocket")
+def websocket():
+    """API endpoint to start a websocket and get its port (we should eventually switch
+    to full addresses)."""
+    ws_thread = threading.Thread(target=start_serve_websocket)
+    ws_thread.start()
+    return {"port": WEBSOCKET_PORT}
+
+
+@app.before_first_request
+def start_threads():
+    # Start the thread that receives updates from the libc interception c code
+    tlv_thread = threading.Thread(target=tlv_server_thread)
+    tlv_thread.start()
+
 
 # Start the flask server
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run()

@@ -1,4 +1,5 @@
 import "./App.css";
+import GDBTerminal from "./Terminal";
 import ThreadPicker from "./ThreadPicker";
 import Step from "./Step";
 
@@ -6,6 +7,8 @@ function App() {
 
   return (
     <div className="App">
+      <GDBTerminal class="terminal" />
+
       <iframe title="command submission" name="command-frame" style={{display:'none',}}></iframe>
       <form className="command-form" action="/api/output" method="POST" target="command-frame">
         <ThreadPicker />
