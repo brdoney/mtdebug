@@ -3,6 +3,7 @@ import os
 import pty
 from select import select
 import subprocess
+from time import time
 from typing import cast
 
 from pygdbmi.gdbcontroller import DEFAULT_GDB_LAUNCH_COMMAND
@@ -65,10 +66,16 @@ class GdbController:
         """
         If we are using MI right now, get and parse GDB response. Otherwise, read
         bytes directly from the pty connected to the gdb instance. See
-        `IoManager.get_gdb_response()` for details about flags
+        `IoManager.get_gdb_response()` for details about flags.
+
+        If `using_mi=False` and the timeout is 0, then this will block until a
+        response is ready.
         """
         if using_mi:
             return self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
+
+        if timeout_sec <= 0:
+            return self.tui_stdout.read(1024)
 
         # Wait for at most `timeout_sec` to read from stdout
         r, _, _ = select([self.tui_stdout], [], [], timeout_sec)
@@ -79,7 +86,7 @@ class GdbController:
             return self.tui_stdout.read(1024)
         elif raise_error_on_timeout:
             raise GdbTimeoutError(
-                "Did not get response from gdb after %s seconds" % timeout_sec
+                f"Did not get response from gdb pty after {timeout_sec} seconds"
             )
         else:
             return None

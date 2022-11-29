@@ -1,17 +1,20 @@
 import os
 from typing import Any, Optional, cast
+from time import time
 import threading
 import linecache
+import functools
 
 from gdb_websocket import GdbController
 from tlv_server import recv_tlv
 
 from flask import Flask, request, send_from_directory, json, jsonify
 from werkzeug.exceptions import HTTPException
-from pygdbmi.constants import GdbTimeoutError
+from pygdbmi.constants import DEFAULT_GDB_TIMEOUT_SEC, GdbTimeoutError
 
 import asyncio
 from websockets import server as wsserver
+import websockets
 
 tlv_lock = threading.Lock()
 tlv_messages = []
@@ -82,8 +85,7 @@ def gdbmi_output():
         gdbmi.write("-file-exec-and-symbols multithread-demo")
         gdbmi.write("b main")
         output = gdbmi.write("-exec-run")
-    elif input == "variables":   # variables command (to be deprecated)
-        print(request.form)
+    elif input == "variables":  # variables command (to be deprecated)
         tid = request.form["thread"]
         output = gdbmi.write(
             f"-stack-list-variables --thread {tid} --frame 0 --all-values"
@@ -91,7 +93,7 @@ def gdbmi_output():
     elif input == "step":
         output = gdbmi.write("-exec-step")
     elif input == "breakpoint":
-        input = request.form["breakpoint"]   # get line to break at
+        input = request.form["breakpoint"]  # get line to break at
         output = gdbmi.write("b " + input)
     elif input == "continue":
         output = gdbmi.write("-exec-continue")
@@ -137,8 +139,6 @@ def threads():
     all_res = gdbmi.write("-thread-info")
     res = cast(GdbResponse, all_res)
     res = get_result(res)
-    if res is None:
-        print(all_res, res)
 
     """
     threads = res["payload"]["threads"]
@@ -172,48 +172,59 @@ def messages():
     return str(val)
 
 
-async def watch_gdb(ws) -> None:
+async def watch_gdb(ws: wsserver.WebSocketServerProtocol):
+    loop = asyncio.get_running_loop()
+    read_call = functools.partial(gdbmi.read, using_mi=False, timeout_sec=0)
+
+    while True:
+        # Have to run in executor b/c it will block thread (other async calls will be
+        # stuck until unblocked)
+        output = await loop.run_in_executor(None, read_call)
+        print("out:", output)
+
+        # Send the TUI output to the frontend for rendering
+        try:
+            await ws.send(output)
+        except websockets.ConnectionClosedOK:
+            break
+
+
+async def watch_ws(ws: wsserver.WebSocketServerProtocol) -> None:
     while True:
         try:
-            res: bytes | str = await asyncio.wait_for(ws.recv(), 1)
+            res: bytes | str = await ws.recv()
+        except websockets.ConnectionClosedOK:
+            break
 
-            # If we had a string frame (not a byte frame), then have to encode to bytes
-            if isinstance(res, str):
-                res = str.encode(res, "ascii")
-            print("in:", res, type(res))
+        # If we had a string frame (not a byte frame), then have to encode to bytes
+        if isinstance(res, str):
+            res = str.encode(res, "ascii")
+        print("in:", res, type(res))
 
-            # Send the user input to the GDB TUI instance
-            gdbmi.write(res, using_mi=False)
-        except asyncio.TimeoutError:
-            pass
+        # Send the user input to the GDB TUI instance
+        gdbmi.write(res, using_mi=False)
 
-        try:
-            output = gdbmi.read(using_mi=False)
-            print("out:", output)
 
-            # Send the TUI output to the frontend for rendering
-            await ws.send(output)
-        except GdbTimeoutError:
-            pass
+async def watch_gdb_ws(ws: wsserver.WebSocketServerProtocol):
+    """Start watching GDB for output (pty stdout -> websocket) and websocket for user
+    input (websocket -> pty stdin)."""
+    await asyncio.gather(watch_gdb(ws), watch_ws(ws))
+
 
 
 async def serve_gdb():
     async with wsserver.serve(
-        watch_gdb, "localhost", WEBSOCKET_PORT, reuse_address=True, reuse_port=True
+        watch_gdb_ws, "localhost", WEBSOCKET_PORT, reuse_address=True, reuse_port=True
     ):
         print(f"Serving {WEBSOCKET_PORT}")
         await asyncio.Future()  # run forever
-
-
-def start_serve_websocket():
-    asyncio.run(serve_gdb())
 
 
 @app.get("/api/websocket")
 def websocket():
     """API endpoint to start a websocket and get its port (we should eventually switch
     to full addresses)."""
-    ws_thread = threading.Thread(target=start_serve_websocket)
+    ws_thread = threading.Thread(target=asyncio.run, args=[serve_gdb()])
     ws_thread.start()
     return {"port": WEBSOCKET_PORT}
 

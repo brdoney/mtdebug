@@ -7,35 +7,22 @@ import { FitAddon } from "xterm-addon-fit";
 
 export default function GDBTerminal() {
   const termDiv = useRef(null);
-  // eslint-disable-next-line no-unused-vars
-  // const [term, _setTerm] = useState(new Terminal());
-  // // eslint-disable-next-line no-unused-vars
-  // const [fitAddon, _setFitAddon] = useState(new FitAddon());
-  // const [sock, setSock] = useState(null);
-
-  // useEffect(() => {
-  //   term.loadAddon(fitAddon);
-  // }, [term, fitAddon]);
-
-  // useLayoutEffect(() => {
-  //   // NOTE: May lead to race condition when addon is loaded?
-  //   function sizeChanged() {
-  //     fitAddon.fit();
-  //     if (sock !== null) {
-  //       sock.
-  //     }
-  //   }
-  //   window.addEventListener("resize", sizeChanged);
-  //   sizeChanged();
-  //   return () => window.removeEventListener("resize", sizeChanged);
-  // }, [fitAddon]);
 
   useEffect(() => {
-    const term = new Terminal()
+    const term = new Terminal({
+      logLevel: 'debug',
+    });
     const fitAddon = new FitAddon();
-    term.open(document.getElementById("terminal"));
+    let attachAddon; 
+    term.loadAddon(fitAddon);
 
-    fitAddon.fit();
+    // Function to re-fit terminal if its component's size changed
+    function sizeChanged() {
+      console.log("Resized!");
+      fitAddon.fit();
+    }
+    sizeChanged();
+    window.addEventListener("resize", sizeChanged);
 
     // To protect against race condition where we clean up before getting the websocket
     let disposed = false;
@@ -49,10 +36,11 @@ export default function GDBTerminal() {
       if (!disposed) {
         console.log("Trying to connect");
         // setSock(new WebSocket(`ws://localhost:${port}`))
-        const sock =new WebSocket(`ws://localhost:${port}`)
-        const attachAddon = new AttachAddon(sock);
+        const sock = new WebSocket(`ws://localhost:${port}`);
+        attachAddon = new AttachAddon(sock);
 
         term.loadAddon(attachAddon);
+        term.open(termDiv.current);
       }
     }
 
@@ -60,9 +48,14 @@ export default function GDBTerminal() {
 
     return () => {
       disposed = true;
-      term.dispose();
+      window.removeEventListener("resize", sizeChanged);
+      fitAddon.dispose();
+      if (attachAddon !== undefined) {
+        attachAddon.dispose();
+        term.dispose();
+      }
     };
-  }, []);
+  }, [termDiv]);
 
   return <div id="terminal" ref={termDiv}></div>;
 }
