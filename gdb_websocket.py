@@ -3,7 +3,7 @@ import os
 import pty
 from select import select
 import subprocess
-from time import time
+from threading import Lock
 from typing import cast
 
 from pygdbmi.gdbcontroller import DEFAULT_GDB_LAUNCH_COMMAND
@@ -15,8 +15,16 @@ class GdbController:
     gdb: IoManager
     gdb_process: subprocess.Popen
 
+    gdbmi_lock: Lock
+    """Lock to protect from multiple threads (spawned by flask for each request) issuing
+    and reading the results of multiple MI commands concurrently. This will lead to race
+    conditions where pygdmi never sees the "done" response for one command and thus
+    times out, because a concurrent command has that "done" message in its response."""
+
     # stdin/out that the gdb instance is using (really just a pseudoterminal)
     # Writing and reading may seem flipped, but remember we are observing the pty
+    # NOTE: Only one thread should and does read these at a time currently, but
+    # if this changes, then a lock needs to be added
     tui_stdin: io.FileIO
     tui_stdout: io.FileIO
 
@@ -25,6 +33,8 @@ class GdbController:
         gdb_tui_tty_name = os.ttyname(self.tui_pty_slave)
         gdb_tui_pty_name = os.ttyname(self.tui_pty_master)
         print(gdb_tui_pty_name, gdb_tui_tty_name)
+
+        self.gdbmi_lock = Lock()
 
         self.tui_stdin = os.fdopen(self.tui_pty_master, mode="wb", buffering=0)
         self.tui_stdout = os.fdopen(self.tui_pty_master, mode="rb", buffering=0)
@@ -56,8 +66,6 @@ class GdbController:
             self.gdb_process.stderr,  # type: ignore
         )
 
-        self.using_mi = True
-
     def read(
         self,
         timeout_sec: float = DEFAULT_GDB_TIMEOUT_SEC,
@@ -73,7 +81,10 @@ class GdbController:
         response is ready.
         """
         if using_mi:
-            return self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
+            self.gdbmi_lock.acquire()
+            output = self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
+            self.gdbmi_lock.release()
+            return output
 
         if timeout_sec <= 0:
             return self.tui_stdout.read(1024)
@@ -108,12 +119,15 @@ class GdbController:
         if using_mi:
             mi_cmd_to_write = cast(str | list[str], data)
             print(mi_cmd_to_write)
-            return self.gdb.write(
+            self.gdbmi_lock.acquire()
+            output = self.gdb.write(
                 mi_cmd_to_write,
                 timeout_sec,
                 raise_error_on_timeout,
                 read_response,
             )
+            self.gdbmi_lock.release()
+            return output
 
         # We only accept one command (as bytes) at a time for TUI
         data = cast(bytes, data)
