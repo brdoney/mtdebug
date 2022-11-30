@@ -1,9 +1,17 @@
 import ThreadPicker from "./ThreadPicker";
 import Step from "./Step";
 import { useState } from "react";
+import { useSWRConfig } from "swr";
 
 export default function ThreadWindow() {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const { mutate } = useSWRConfig();
+
+  function invalidateData() {
+    console.log("Refreshing")
+    mutate("/api/threads");
+    mutate(`/api/step/${selectedThreadId}`);
+  }
 
   return (
     <div>
@@ -19,6 +27,7 @@ export default function ThreadWindow() {
         action="/api/output"
         method="POST"
         target="command-frame"
+        onSubmit={invalidateData}
       >
         <ThreadPicker
           thread={selectedThreadId}
