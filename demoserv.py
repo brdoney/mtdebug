@@ -9,8 +9,7 @@ from gdb_websocket import GdbController
 from tlv_server import recv_tlv
 
 from flask import Flask, request, send_from_directory, json, jsonify
-from werkzeug.exceptions import HTTPException
-from pygdbmi.constants import DEFAULT_GDB_TIMEOUT_SEC, GdbTimeoutError
+from werkzeug.exceptions import BadRequest, HTTPException
 
 import asyncio
 from websockets import server as wsserver
@@ -76,10 +75,33 @@ def serve(path):
         return send_from_directory(app.static_folder, "index.html")
 
 
+def control_execution(input: str, thread: Optional[int]) -> Optional[GdbResponse]:
+    # We need thread-specific inputs for this
+    # TODO: Implement global execution-controlling instructions w/ -a flag
+    if thread is None:
+        return None
+
+    if input == "step":
+        output = gdbmi.write(f"-exec-step --thread {thread}")
+    elif input == "next":
+        output = gdbmi.write(f"-exec-next --thread {thread}")
+    elif input == "finish":
+        output = gdbmi.write(f"-exec-finish --thread {thread}")
+    elif input == "continue":
+        output = gdbmi.write(f"-exec-continue --thread {thread}")
+    elif input == "stop":
+        output = gdbmi.write(f"-exec-return --thread {thread}")
+    else:
+        return None
+    return output  # type: ignore
+
+
 @app.post("/api/output")
 def gdbmi_output():
     """Handle post requests from react"""
     input = request.form["submit"]
+    thread = request.form.get("thread", type=int)
+
     output = []
     if input == "start":  # start gdb execution, set breakpoint on main
         gdbmi.write("-file-exec-and-symbols multithread-demo")
@@ -90,19 +112,13 @@ def gdbmi_output():
         output = gdbmi.write(
             f"-stack-list-variables --thread {tid} --frame 0 --all-values"
         )
-    elif input == "step":
-        output = gdbmi.write("-exec-step")
-    elif input == "next":
-        output = gdbmi.write("-exec-next")
-    elif input == "finish":
-        output = gdbmi.write("-exec-finish")
     elif input == "breakpoint":
         input = request.form["breakpoint"]  # get line to break at
         output = gdbmi.write("b " + input)
-    elif input == "continue":
-        output = gdbmi.write("-exec-continue")
-    elif input == "stop":
-        output = gdbmi.write("-exec-return")
+    elif (res := control_execution(input, thread)) is not None:
+        output = res
+    else:
+        raise BadRequest(f"Invalid form input value '{input}'")
     return output
 
 

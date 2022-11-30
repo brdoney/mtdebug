@@ -33,6 +33,7 @@ class GdbController:
         startup_commands = [
             f"new-ui console {gdb_tui_tty_name}",
             "set pagination off",
+            "set non-stop on",
             "set debuginfod enabled on",
         ]
         startup_commands_str = [f"-iex={c}" for c in startup_commands]

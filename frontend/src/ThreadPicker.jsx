@@ -33,7 +33,6 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
       <select
         disabled={!threads || threads.length === 0}
         name="thread"
-        id="thread"
         defaultValue="default"
         {...args}
         onChange={handleChange}

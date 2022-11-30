@@ -3,11 +3,15 @@ import useSWR from "swr";
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
 export default function Step({ thread }) {
-  const { data: output, error } = useSWR(
+  let { data: output, error } = useSWR(
     thread != null ? `/api/step/${thread}` : null,
     fetcher,
     { refreshInterval: 20 }
   );
+  if (thread == null) {
+    error = true;
+  }
+
 
   let message;
   if (output && output.line_num !== -1) {
