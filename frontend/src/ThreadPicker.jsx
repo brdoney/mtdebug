@@ -3,9 +3,8 @@ import React from "react";
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
-export default function ThreadPicker({ ...args }) {
-  const { data: threads, error } = useSWR("/api/threads", fetcher, {refreshInterval: 10});
-  const [thread, this_thread] = React.useState();
+export default function ThreadPicker({ thread, setThread, ...args }) {
+  const { data: threads, error } = useSWR("/api/threads", fetcher);
 
   if (error) {
     return <p>Could not connect to api</p>;
@@ -17,18 +16,16 @@ export default function ThreadPicker({ ...args }) {
     </option>,
   ];
   if (threads) {
-    console.log(threads)
     options = options.concat(
       threads.map((t) => (
-        <option key={t.id} value={t.id}>{`${t.id} ${t["target_id"]}`}</option>
+        <option key={t.id} value={t.id}>{`${t.id} ${t["target-id"]}`}</option>
       ))
     );
   }
 
-  const handleChange = (e) =>
-  {
+  const handleChange = (e) => {
     const val = e.target.value;
-    this_thread(val);
+    setThread(val);
   };
 
   return (
@@ -39,14 +36,13 @@ export default function ThreadPicker({ ...args }) {
         id="thread"
         defaultValue="default"
         {...args}
-      onChange={handleChange}>
-
+        onChange={handleChange}
+      >
         {options}
       </select>
-      <p >{thread}</p>
-      <p >Local vars:</p>
-      <p >Global vars:</p>
-      <p >Locks held:</p>
+      <p>Local vars:</p>
+      <p>Global vars:</p>
+      <p>Locks held:</p>
     </div>
   );
 }

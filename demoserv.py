@@ -92,6 +92,10 @@ def gdbmi_output():
         )
     elif input == "step":
         output = gdbmi.write("-exec-step")
+    elif input == "next":
+        output = gdbmi.write("-exec-next")
+    elif input == "finish":
+        output = gdbmi.write("-exec-finish")
     elif input == "breakpoint":
         input = request.form["breakpoint"]  # get line to break at
         output = gdbmi.write("b " + input)
@@ -102,14 +106,15 @@ def gdbmi_output():
     return output
 
 
-@app.get("/api/step")
-def step_info():
+@app.get("/api/step/<int:thread_id>")
+def step_info(thread_id: int):
     """Stepping command, steps for whole program."""
     line = ""
     num = -1
     try:
         # get stack frame info
-        res = cast(GdbResponse, gdbmi.write("-stack-info-frame"))[0]
+        res = gdbmi.write(f"-stack-info-frame --thread {thread_id}")
+        res = cast(GdbResponse, res)[0]
         frame = {}
         line = ""
 
@@ -209,7 +214,6 @@ async def watch_gdb_ws(ws: wsserver.WebSocketServerProtocol):
     """Start watching GDB for output (pty stdout -> websocket) and websocket for user
     input (websocket -> pty stdin)."""
     await asyncio.gather(watch_gdb(ws), watch_ws(ws))
-
 
 
 async def serve_gdb():

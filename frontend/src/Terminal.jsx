@@ -9,9 +9,7 @@ export default function GDBTerminal() {
   const termDiv = useRef(null);
 
   useEffect(() => {
-    const term = new Terminal({
-      logLevel: 'debug',
-    });
+    const term = new Terminal();
     const fitAddon = new FitAddon();
     let attachAddon; 
     term.loadAddon(fitAddon);
