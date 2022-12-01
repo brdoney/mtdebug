@@ -31,3 +31,10 @@ code {
   padding: 10px;
 }
 
+.windows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  justify-items: center;
+}
+

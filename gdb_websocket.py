@@ -66,6 +66,10 @@ class GdbController:
             self.gdb_process.stderr,  # type: ignore
         )
 
+        # Has to be set using mi syntax, which -iex doesn't support?
+        # This is so that we can still control other threads while waiting for a mutex
+        self.gdb.write("-gdb-set mi-async on")
+
     def read(
         self,
         timeout_sec: float = DEFAULT_GDB_TIMEOUT_SEC,
@@ -82,7 +86,15 @@ class GdbController:
         """
         if using_mi:
             self.gdbmi_lock.acquire()
-            output = self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
+            try:
+                output = self.gdb.get_gdb_response(timeout_sec, raise_error_on_timeout)
+            except GdbTimeoutError as e:
+                # The operation timed out, but we need other things to continue;
+                # this is important for mutexes, where a lock operation will timeout
+                # and continue until another thread (which we need to control) continues
+                self.gdbmi_lock.release()
+                raise e
+
             self.gdbmi_lock.release()
             return output
 
@@ -119,13 +131,22 @@ class GdbController:
         if using_mi:
             mi_cmd_to_write = cast(str | list[str], data)
             print(mi_cmd_to_write)
+
             self.gdbmi_lock.acquire()
-            output = self.gdb.write(
-                mi_cmd_to_write,
-                timeout_sec,
-                raise_error_on_timeout,
-                read_response,
-            )
+            try:
+                output = self.gdb.write(
+                    mi_cmd_to_write,
+                    timeout_sec,
+                    raise_error_on_timeout,
+                    read_response,
+                )
+            except GdbTimeoutError as e:
+                # The operation timed out, but we need other things to continue;
+                # this is important for mutexes, where a lock operation will timeout
+                # and continue until another thread (which we need to control) continues
+                self.gdbmi_lock.release()
+                raise e
+
             self.gdbmi_lock.release()
             return output
 

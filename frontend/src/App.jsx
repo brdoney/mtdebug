@@ -6,7 +6,10 @@ function App() {
   return (
     <div className="App">
       <GDBTerminal class="terminal" />
-      <ThreadWindow />
+      <div className="windows">
+        <ThreadWindow />
+        <ThreadWindow />
+      </div>
     </div>
   );
 }
