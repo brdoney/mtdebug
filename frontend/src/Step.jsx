@@ -1,8 +1,11 @@
 import useSWR from "swr";
+import { useWriteGdb } from "./common";
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
 export default function Step({ thread }) {
+  const { postJson } = useWriteGdb(thread);
+
   let { data: output, error } = useSWR(
     thread != null ? `/api/step/${thread}` : null,
     fetcher
@@ -18,23 +21,27 @@ export default function Step({ thread }) {
     message = "Program not in execution";
   }
 
+  function submitControl(action) {
+    postJson("/api/exec", { action, thread });
+  }
+
   return (
     <div className="Step">
       <header className="Step-info">
         <h1>Debug actions: </h1>
-        <button disabled={error} name="submit" value="step">
+        <button disabled={error} onClick={() => submitControl("step")}>
           step
         </button>
-        <button disabled={error} name="submit" value="next">
+        <button disabled={error} onClick={() => submitControl("next")}>
           next
         </button>
-        <button disabled={error} name="submit" value="finish">
+        <button disabled={error} onClick={() => submitControl("finish")}>
           finish
         </button>
-        <button disabled={error} name="submit" value="continue">
+        <button disabled={error} onClick={() => submitControl("continue")}>
           continue
         </button>
-        <button disabled={error} name="submit" value="stop">
+        <button disabled={error} onClick={() => submitControl("stop")}>
           stop
         </button>
         <p>

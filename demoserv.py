@@ -75,51 +75,42 @@ def serve(path):
         return send_from_directory(app.static_folder, "index.html")
 
 
-def control_execution(input: str, thread: Optional[int]) -> Optional[GdbResponse]:
-    # We need thread-specific inputs for this
-    # TODO: Implement global execution-controlling instructions w/ -a flag
-    if thread is None:
-        return None
+@app.post("/api/start")
+def start_program():
+    gdbmi.write("-file-exec-and-symbols multithread-demo")
+    gdbmi.write("b main")
+    output = gdbmi.write("-exec-run")
+    return output
 
-    if input == "step":
+
+@app.post("/api/exec")
+def control_execution():
+    # TODO: Implement global execution-controlling instructions w/ -a flag
+
+    json = request.get_json()
+    action = json["action"]
+    thread = json["thread"]
+
+    if action == "step":
         output = gdbmi.write(f"-exec-step --thread {thread}")
-    elif input == "next":
+    elif action == "next":
         output = gdbmi.write(f"-exec-next --thread {thread}")
-    elif input == "finish":
+    elif action == "finish":
         output = gdbmi.write(f"-exec-finish --thread {thread}")
-    elif input == "continue":
+    elif action == "continue":
         output = gdbmi.write(f"-exec-continue --thread {thread}")
-    elif input == "stop":
+    elif action == "stop":
         output = gdbmi.write(f"-exec-return --thread {thread}")
     else:
         return None
     return output  # type: ignore
 
 
-@app.post("/api/output")
-def gdbmi_output():
-    """Handle post requests from react"""
-    input = request.form["submit"]
-    thread = request.form.get("thread", type=int)
-
-    output = []
-    if input == "start":  # start gdb execution, set breakpoint on main
-        gdbmi.write("-file-exec-and-symbols multithread-demo")
-        gdbmi.write("b main")
-        output = gdbmi.write("-exec-run")
-    elif input == "variables":  # variables command (to be deprecated)
-        tid = request.form["thread"]
-        output = gdbmi.write(
-            f"-stack-list-variables --thread {tid} --frame 0 --all-values"
-        )
-    elif input == "breakpoint":
-        input = request.form["breakpoint"]  # get line to break at
-        output = gdbmi.write("b " + input)
-    elif (res := control_execution(input, thread)) is not None:
-        output = res
-    else:
-        raise BadRequest(f"Invalid form input value '{input}'")
-    return output
+@app.post("/api/breakpoint")
+def handle_breakpoint():
+    json = request.get_json()
+    symbol = json["symbol"]
+    return gdbmi.write(f"b {symbol}")
 
 
 @app.get("/api/step/<int:thread_id>")
