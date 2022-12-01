@@ -3,7 +3,9 @@ import socket
 import os
 import struct
 import dataclasses
-from typing import Optional
+from typing import Any, Optional
+
+from flask.json import JSONEncoder
 
 TLV_LEN = 16
 TLV_PREFIX_LEN = struct.calcsize("!ii")
@@ -26,13 +28,24 @@ class TLVMessage:
     value: str
 
 
+class TLVJSONEncoder(JSONEncoder):
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, TLVTag):
+            return obj.name
+        elif isinstance(obj, TLVMessage):
+            return obj.__dict__
+        return super().default(obj)
+
+
 def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
     tag: int
     length: int
     value: bytes
     (tag, length, value) = struct.unpack(f"!ii{TLV_MESSAGE_LEN}s", message)
 
-    if remaining_len is not None:
+    if length < TLV_MESSAGE_LEN:
+        value = value[:length]
+    elif remaining_len is not None:
         value = value[:remaining_len]
 
     str_value = value.decode("ascii")
@@ -85,9 +98,11 @@ def __open_socket():
         return
 
     if os.path.exists("/tmp/socket_test.s"):
-        os.remove("/tmp/socket_test.s")
+        os.unlink("/tmp/socket_test.s")
 
     __server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    __server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    __server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     __server.bind("/tmp/socket_test.s")
 
     __server.listen(1)

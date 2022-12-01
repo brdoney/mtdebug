@@ -24,7 +24,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex) {
   }
 
   char msg[] = "Locked!";
-  send_message(MUTEX_LOCK, sizeof(msg), msg);
+  send_message(MUTEX_LOCK, strlen(msg), msg);
 
   return (*o_pthread_mutex_lock)(mutex);
 }
@@ -38,7 +38,7 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) {
   }
 
   char msg[] = "Unlocked!";
-  send_message(MUTEX_UNLOCK, sizeof(msg), msg);
+  send_message(MUTEX_UNLOCK, strlen(msg), msg);
 
   return (*o_pthread_mutex_unlock)(mutex);
 }

@@ -6,7 +6,7 @@ import linecache
 import functools
 
 from gdb_websocket import GdbController
-from tlv_server import recv_tlv
+from tlv_server import TLVJSONEncoder, TLVMessage, recv_tlv
 
 from flask import Flask, request, send_from_directory, json, jsonify
 from werkzeug.exceptions import BadRequest, HTTPException
@@ -16,7 +16,7 @@ from websockets import server as wsserver
 import websockets
 
 tlv_lock = threading.Lock()
-tlv_messages = []
+tlv_messages: list[TLVMessage] = []
 
 # Type that describes a parsed response from pygdmi
 GdbResponseEntry = dict[str, Any]
@@ -27,6 +27,7 @@ WEBSOCKET_PORT = 5001
 
 
 def tlv_server_thread():
+    print("Starting tlv server")
     while True:
         msg = recv_tlv()
         print(msg)
@@ -177,6 +178,8 @@ def threads():
 def messages():
     tlv_lock.acquire()
     if len(tlv_messages) > 0:
+        val = TLVJSONEncoder().encode(tlv_messages)
+        print(val)
         val = tlv_messages
     else:
         val = "No messages yet"
