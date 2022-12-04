@@ -115,7 +115,7 @@ def step_info():
         if res["message"] != "error":
             frame = res["payload"]["frame"]
             num = int(frame["line"])
-            line = linecache.getline("./examples/multithread-demo.c", num)
+            line = linecache.getline("demo-multithread.c", num)
     except Exception:
         # TODO: Slim down what we're catching to just be what is raised
         # command not running
@@ -140,24 +140,40 @@ def threads():
     if res is None:
         print(all_res, res)
 
-    """
+    globals = gdbmi.write("-symbol-list-variables")
+    print(globals)
+
+    json_threads = []
+
     threads = res["payload"]["threads"]
     if res["message"] != "done":
         raise InternalServerError("Could not fetch threads")
     if res["payload"]["threads"] != []:
+        # iterate through list of threads
         for thread in threads:
             curr_vars = []
             tid = int(thread["id"])
+            # get local variables from current frame
             output = cast(GdbResponse, gdbmi.write(
-            f"-stack-list-variables --thread {tid} --frame 0 --all-values"))[0]
-            output_list = output["payload"]["variables"]
+            f"-stack-list-locals --thread {tid} --frame 0 --simple-values"))[0]
+            
+            output_list = output["payload"]["locals"]
+
+            # check next frame
+            if (not output_list):
+                output = cast(GdbResponse, gdbmi.write(
+            f"-stack-list-locals --thread {tid} --frame 1 --simple-values"))[0]
+                output_list = output["payload"]["locals"]
+
             for vars in output_list:
-                for var in vars:
-                    if var != 'none':
-                        curr_vars.append(var)
+                if vars != 'none':
+                    curr_vars.append(vars)
+                    print(vars)
             json_threads.append({"tid":tid, "vars": curr_vars, "target-id":thread["target-id"]})
-    """
-    return res["payload"]["threads"]
+            
+
+    return json_threads
+
 
 
 @app.route("/api/msg")

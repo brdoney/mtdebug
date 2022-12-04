@@ -4,7 +4,7 @@ import React from "react";
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
 export default function ThreadPicker({ ...args }) {
-  const { data: threads, error } = useSWR("/api/threads", fetcher, {refreshInterval: 10});
+  const { data: threads, error } = useSWR("/api/threads", fetcher);
   const [thread, setThread] = React.useState();
 
   if (error) {
@@ -30,18 +30,14 @@ export default function ThreadPicker({ ...args }) {
     {
       if(threads[i]["vars"])
       {
-        let curr = []; 
-        curr = curr.concat(
-          threads[i]["vars"].map((v) => (
-            <p>{`${v.name} ${v.value}`}</p>
-          ))
-        );
+        let curr = [];
+        curr = curr.concat(threads[i]["vars"].map((v) => (
+          <tr><td>{`${v.type}`}</td><td>{`${v.name}`}</td> <td>{`${v.value}`}</td></tr>
+        )))
         variables.push(curr)
       }
     }
   }
-
-  console.log(threads)
 
   const handleChange = (e) =>
   {
@@ -50,20 +46,29 @@ export default function ThreadPicker({ ...args }) {
   };
 
   return (
-    <div>
-      <select
-        disabled={!threads || threads.length === 0}
-        name="thread"
-        id="thread"
-        defaultValue="default"
-        {...args}
-      onChange={handleChange}>
+    <body>
+      <div id="threadPicker">
+        <select
+          disabled={!threads || threads.length === 0}
+          name="thread"
+          id="thread"
+          defaultValue="default"
+          {...args}
+        onChange={handleChange}>
 
-        {options}
-      </select>
-      <div >Local vars: {thread}</div>
-      <p >Global vars:</p>
-      <p >Locks held:</p>
-    </div>
+          {options}
+        </select>
+        <table id="localVars">
+          <thead>
+            <tr>
+              <th class='prop_name' data-prop-name='type'>Type</th>
+              <th class='prop_name' data-prop-name='name'>Name</th>
+              <th class='prop_name' data-prop-name='value'>Value</th>
+            </tr>
+          </thead>
+          {thread}
+        </table>
+      </div>
+    </body>
   );
 }
