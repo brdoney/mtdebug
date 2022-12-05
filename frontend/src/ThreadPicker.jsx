@@ -16,58 +16,56 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
     </option>,
   ];
 
-  let variables = [
-  ];
+  let variables = [];
 
-  if (threads) {
+  const haveThreads = threads && Object.keys(threads).length > 0;
+  if (haveThreads) {
     options = options.concat(
-      threads.map((t) => (
-        <option key={t.id} value={t.id}>{`${t.id} ${t["target-id"]}`}</option>
+      Object.entries(threads).map(([id, t]) => (
+        <option key={id} value={id}>
+          {id} {t["target-id"]}
+        </option>
       ))
     );
-    for(var i = 0; i < threads.length; i++)
-    {
-      if(threads[i]["vars"])
-      {
-        let curr = [];
-        curr = curr.concat(threads[i]["vars"].map((v) => (
-          <tr><td>{`${v.type}`}</td><td>{`${v.name}`}</td> <td>{`${v.value}`}</td></tr>
-        )))
-        variables.push(curr)
-      }
+    if (thread != null) {
+      console.log(thread);
+      variables = threads[thread]["vars"].map((v) => (
+        <tr key={v.name}>
+          <td>{v.type}</td>
+          <td>{v.name}</td>
+          <td>{v.value}</td>
+        </tr>
+      ));
     }
   }
 
-  const handleChange = (e) =>
-  {
+  const handleChange = (e) => {
     const tid = e.target.value;
-    setThread(variables[tid-1]);
+    setThread(tid);
   };
 
   return (
-    <body>
-      <div id="threadPicker">
-        <select
-          disabled={!threads || threads.length === 0}
-          name="thread"
-          id="thread"
-          defaultValue="default"
-          {...args}
-        onChange={handleChange}>
-
-          {options}
-        </select>
-        <table>
-          <thead>
-            <tr>
-              <th data-prop-name='type'>Type</th>
-              <th data-prop-name='name'>Name</th>
-              <th data-prop-name='value'>Value</th>
-            </tr>
-          </thead>
-          {thread}
-        </table>
-      </div>
-    </body>
+    <div id="threadPicker">
+      <select
+        disabled={!haveThreads}
+        name="thread"
+        id="thread"
+        defaultValue="default"
+        {...args}
+        onChange={handleChange}
+      >
+        {options}
+      </select>
+      <table>
+        <thead>
+          <tr>
+            <th data-prop-name="type">Type</th>
+            <th data-prop-name="name">Name</th>
+            <th data-prop-name="value">Value</th>
+          </tr>
+        </thead>
+        <tbody>{variables}</tbody>
+      </table>
+    </div>
   );
 }
