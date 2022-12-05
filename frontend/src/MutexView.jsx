@@ -41,7 +41,7 @@ export default function MutexView() {
     let waiters;
     if (Object.keys(rs.waiters).length > 0) {
       const waiterEls = rs.waiters.map((waiter) => (
-        <li>
+        <li key={waiter}>
           {threadMap[waiter].id} {threadMap[waiter]["target-id"]}
         </li>
       ));
@@ -52,13 +52,11 @@ export default function MutexView() {
 
     const owner = threadMap[rs.owner];
     const entry = (
-      <li>
-        <p>
-          Owner: {owner.id} {owner["target-id"]}
-          <br />
-          Waiters: {waiters}
-        </p>
-      </li>
+      <div className="resource-entry">
+        <p>Owner: {owner.id} {owner["target-id"]}</p>
+        <p>Waiters: </p>
+        <div className="resource-waiters">{waiters}</div>
+      </div>
     );
     resourceEntries.push(entry);
   }
@@ -66,7 +64,7 @@ export default function MutexView() {
   return (
     <div>
       <h3>Mutexes</h3>
-      <ul className="resources">{resourceEntries}</ul>
+      <div className="resources">{resourceEntries}</div>
     </div>
   );
 }

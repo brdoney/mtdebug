@@ -12,9 +12,7 @@ function App() {
 
       <div className="controls">
         <BreakpointForm />
-        <div className="start-button">
-          <StartButton />
-        </div>
+        <StartButton />
         <MutexView />
 
         <div className="windows">

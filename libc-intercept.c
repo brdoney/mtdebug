@@ -18,6 +18,8 @@ static int (*o_pthread_mutex_unlock)(pthread_mutex_t *) = NULL;
 
 #define MAX_MESSAGE_LEN 32
 
+static pthread_mutex_t socket_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static char *json_message(pthread_t tid, pthread_mutex_t *mutex) {
   char address[MAX_MESSAGE_LEN];
   snprintf(address, MAX_MESSAGE_LEN, "%p", mutex);
@@ -33,15 +35,22 @@ static char *json_message(pthread_t tid, pthread_mutex_t *mutex) {
 }
 
 int pthread_mutex_lock(pthread_mutex_t *mutex) {
-  pthread_t tid = pthread_self();
-  printf("Locking mutex from TID %lu\n", tid);
-
   if (o_pthread_mutex_lock == NULL) {
     o_pthread_mutex_lock = dlsym(RTLD_NEXT, "pthread_mutex_lock");
   }
 
+  if (mutex == &socket_lock) {
+    // Bypass for socket lock
+    return (*o_pthread_mutex_lock)(mutex);
+  }
+
+  pthread_t tid = pthread_self();
+  printf("Locking mutex from TID %lu\n", tid);
+
   char *msg = json_message(tid, mutex);
+  pthread_mutex_lock(&socket_lock);
   send_message(MUTEX_LOCK, strlen(msg), msg);
+  pthread_mutex_unlock(&socket_lock);
   free(msg);
 
   // Run the actual mutex lock (which might block while waiting)
@@ -52,22 +61,31 @@ int pthread_mutex_lock(pthread_mutex_t *mutex) {
 
   // Notify that we've claimed the mutex
   msg = json_message(tid, mutex);
+  pthread_mutex_lock(&socket_lock);
   send_message(MUTEX_CLAIM, strlen(msg), msg);
+  pthread_mutex_unlock(&socket_lock);
   free(msg);
 
   return res;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex) {
-  pthread_t tid = pthread_self();
-  printf("Unlocking mutex from TID %lu\n", tid);
-
   if (o_pthread_mutex_unlock == NULL) {
     o_pthread_mutex_unlock = dlsym(RTLD_NEXT, "pthread_mutex_unlock");
   }
 
+  if (mutex == &socket_lock) {
+    // Bypass for socket lock
+    return (*o_pthread_mutex_unlock)(mutex); 
+  }
+
+  pthread_t tid = pthread_self();
+  printf("Unlocking mutex from TID %lu\n", tid);
+
   char *msg = json_message(tid, mutex);
+  pthread_mutex_lock(&socket_lock);
   send_message(MUTEX_UNLOCK, strlen(msg), msg);
+  pthread_mutex_unlock(&socket_lock);
   free(msg);
 
   return (*o_pthread_mutex_unlock)(mutex);
