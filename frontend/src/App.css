@@ -13,7 +13,11 @@ body {
   height: 70vh;
 }
 
-.command-form {
+.start-button {
+  margin-bottom: 1em;
+}
+
+.controls {
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -21,6 +25,8 @@ body {
   justify-content: center;
   color: white;
   gap: 10px;
+  margin-top: 1em;
+  margin-bottom: 1em;
 }
 
 code {
@@ -29,5 +35,13 @@ code {
   min-height:fit-content;
   border: 4px solid white;
   padding: 10px;
+}
+
+.windows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  justify-items: stretch;
+  width: 100%;
 }
 

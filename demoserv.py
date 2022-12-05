@@ -79,6 +79,7 @@ def serve(path):
 def start_program():
     gdbmi.write("-file-exec-and-symbols multithread-demo")
     gdbmi.write("b main")
+    gdbmi.write("b thread_func")
     output = gdbmi.write("-exec-run")
     return output
 

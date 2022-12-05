@@ -28,7 +28,6 @@ export default function Step({ thread }) {
   return (
     <div className="Step">
       <header className="Step-info">
-        <h1>Debug actions: </h1>
         <button disabled={error} onClick={() => submitControl("step")}>
           step
         </button>
