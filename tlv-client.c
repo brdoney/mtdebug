@@ -19,7 +19,7 @@
 
 static int __socketfd = -1;
 
-#define TLV_LEN 16
+#define TLV_LEN 64
 #define TLV_PREFIX_LEN (sizeof(enum tlv_tag) + sizeof(int))
 #define TLV_MESSAGE_LEN TLV_LEN - TLV_PREFIX_LEN
 

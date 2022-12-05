@@ -6,7 +6,7 @@ run-demo: demo libc-intercept
 	@LD_PRELOAD=./libc-intercept.so ./demo
 
 libc-intercept: tlv-client.o libc-intercept.c
-	$(CC) -shared -o libc-intercept.so tlv-client.o libc-intercept.c -ldl
+	$(CC) -shared -o libc-intercept.so tlv-client.o libc-intercept.c -ldl -ljansson
 
 demo: examples/demo.c
 	gcc -ggdb3 -o demo examples/demo.c -pthread

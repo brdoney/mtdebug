@@ -5,9 +5,9 @@ import struct
 import dataclasses
 from typing import Any, Optional
 
-from flask.json import JSONEncoder
+from flask.json.provider import DefaultJSONProvider, JSONProvider
 
-TLV_LEN = 16
+TLV_LEN = 64
 TLV_PREFIX_LEN = struct.calcsize("!ii")
 TLV_MESSAGE_LEN = TLV_LEN - TLV_PREFIX_LEN
 print(TLV_LEN, TLV_PREFIX_LEN, TLV_MESSAGE_LEN)
@@ -28,13 +28,26 @@ class TLVMessage:
     value: str
 
 
-class TLVJSONEncoder(JSONEncoder):
-    def default(self, obj: Any) -> Any:
+@dataclasses.dataclass
+class LibcAction:
+    tag: TLVTag
+    thread: int
+    address: str
+
+
+class TLVJSONEncoder(DefaultJSONProvider):
+    @staticmethod
+    def default(obj: Any) -> Any:
+        print("TLVJSONEncoder here!")
         if isinstance(obj, TLVTag):
             return obj.name
-        elif isinstance(obj, TLVMessage):
+        elif isinstance(obj, LibcAction) or isinstance(obj, TLVMessage):
             return obj.__dict__
         return super().default(obj)
+
+    def dumps(self, obj: Any, **kwargs: Any) -> str:
+        print("TLVJSONEncoder dumps here!")
+        return super().dumps(obj, default=self.default, **kwargs)
 
 
 def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
@@ -55,7 +68,7 @@ def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
     return TLVMessage(tlv_tag, length, str_value)
 
 
-def recv_tlv() -> TLVMessage:
+def recv_tlv(json: JSONProvider) -> LibcAction:
     # Start the server if it wasn't already started
     if __server is None:
         __open_socket()
@@ -88,7 +101,8 @@ def recv_tlv() -> TLVMessage:
 
     conn.close()
 
-    return TLVMessage(tag, full_length, message)
+    msg_json = json.loads(message)
+    return LibcAction(tag, msg_json["thread"], msg_json["address"])
 
 
 def __open_socket():

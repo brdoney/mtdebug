@@ -2,6 +2,13 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Getting Started
+
+This project has the following dependencies:
+- [Jansson](https://github.com/akheron/jansson)
+
+If you are running Fedora, Jansson can be installed easily using `sudo dnf install jansson jansson-devel`.
+
 ## Available Scripts
 
 In the project directory, you can run:
