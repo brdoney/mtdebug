@@ -58,3 +58,11 @@ def resource_state() -> Response:
     resp = jsonify(__resources)
     __tracking_lock.release()
     return resp
+
+
+def clear_resource_states():
+    global __resources
+
+    __tracking_lock.acquire()
+    __resources.clear()
+    __tracking_lock.release()

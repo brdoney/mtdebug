@@ -4,7 +4,7 @@ import threading
 import linecache
 import functools
 
-from action_tracker import resource_state, track_action
+from action_tracker import clear_resource_states, resource_state, track_action
 from gdb_websocket import GdbController
 from json_provider import CustomEncoder
 from tlv_server import recv_tlv
@@ -75,6 +75,7 @@ def serve(path):
 
 @app.post("/api/start")
 def start_program():
+    clear_resource_states()
     gdbmi.write("-file-exec-and-symbols multithread-demo")
     gdbmi.write("b main")
     gdbmi.write("b thread_func")

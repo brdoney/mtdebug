@@ -37,7 +37,7 @@ export default function MutexView() {
 
   let resourceEntries = [];
   // eslint-disable-next-line no-unused-vars
-  for (const [_address, rs] of Object.entries(resources)) {
+  for (const [address, rs] of Object.entries(resources)) {
     let waiters;
     if (Object.keys(rs.waiters).length > 0) {
       const waiterEls = rs.waiters.map((waiter) => (
@@ -52,7 +52,7 @@ export default function MutexView() {
 
     const owner = threadMap[rs.owner];
     const entry = (
-      <div className="resource-entry">
+      <div className="resource-entry" key={address}>
         <p>Owner: {owner.id} {owner["target-id"]}</p>
         <p>Waiters: </p>
         <div className="resource-waiters">{waiters}</div>
