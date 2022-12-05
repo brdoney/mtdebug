@@ -58,7 +58,7 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
   };
 
   return (
-    <div class="thread-picker">
+    <div className="thread-picker">
       <select
         disabled={!haveThreads}
         name="thread"

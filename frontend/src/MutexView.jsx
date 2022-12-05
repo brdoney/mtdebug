@@ -27,12 +27,12 @@ export default function MutexView() {
 
   const threadMap = {};
   const re = new RegExp("Thread (0[xX][0-9a-fA-F]+)");
-  for (const thread of threads) {
+  for (const [gdbId, thread] of Object.entries(threads)) {
     const tidString = thread["target-id"];
     const match = re.exec(tidString);
     const tidHex = match[1];
     const tid = parseInt(tidHex, 16);
-    threadMap[tid] = { id: thread.id, "target-id": tidString };
+    threadMap[tid] = { id: gdbId, "target-id": tidString };
   }
 
   let resourceEntries = [];
