@@ -50,10 +50,18 @@ export default function MutexView() {
       waiters = "No one is waiting on this mutex";
     }
 
-    const owner = threadMap[rs.owner];
+    let owner = <p>Owner: No owner</p>;
+    if (rs.owner != null) {
+      const ownerInfo = threadMap[rs.owner];
+      owner = (
+        <p>
+          Owner: {ownerInfo.id} {ownerInfo["target-id"]}
+        </p>
+      );
+    }
     const entry = (
       <div className="resource-entry" key={address}>
-        <p>Owner: {owner.id} {owner["target-id"]}</p>
+        {owner}
         <p>Waiters: </p>
         <div className="resource-waiters">{waiters}</div>
       </div>
