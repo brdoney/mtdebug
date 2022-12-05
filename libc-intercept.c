@@ -44,7 +44,18 @@ int pthread_mutex_lock(pthread_mutex_t *mutex) {
   send_message(MUTEX_LOCK, strlen(msg), msg);
   free(msg);
 
-  return (*o_pthread_mutex_lock)(mutex);
+  // Run the actual mutex lock (which might block while waiting)
+  int res = (*o_pthread_mutex_lock)(mutex);
+  if (res != 0) {
+    return res;
+  }
+
+  // Notify that we've claimed the mutex
+  msg = json_message(tid, mutex);
+  send_message(MUTEX_CLAIM, strlen(msg), msg);
+  free(msg);
+
+  return res;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex) {

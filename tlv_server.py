@@ -3,9 +3,9 @@ import socket
 import os
 import struct
 import dataclasses
-from typing import Any, Optional
+from typing import Optional
 
-from flask.json.provider import DefaultJSONProvider, JSONProvider
+from flask.json.provider import JSONProvider
 
 TLV_LEN = 64
 TLV_PREFIX_LEN = struct.calcsize("!ii")
@@ -19,6 +19,7 @@ __server: Optional[socket.socket] = None
 class TLVTag(enum.Enum):
     MUTEX_LOCK = 0
     MUTEX_UNLOCK = 1
+    MUTEX_CLAIM = 2
 
 
 @dataclasses.dataclass
@@ -33,21 +34,6 @@ class LibcAction:
     tag: TLVTag
     thread: int
     address: str
-
-
-class TLVJSONEncoder(DefaultJSONProvider):
-    @staticmethod
-    def default(obj: Any) -> Any:
-        print("TLVJSONEncoder here!")
-        if isinstance(obj, TLVTag):
-            return obj.name
-        elif isinstance(obj, LibcAction) or isinstance(obj, TLVMessage):
-            return obj.__dict__
-        return super().default(obj)
-
-    def dumps(self, obj: Any, **kwargs: Any) -> str:
-        print("TLVJSONEncoder dumps here!")
-        return super().dumps(obj, default=self.default, **kwargs)
 
 
 def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
@@ -98,6 +84,7 @@ def recv_tlv(json: JSONProvider) -> LibcAction:
         else:
             length_remaining -= TLV_MESSAGE_LEN
             message += tlv.value
+        tag = tlv.tag
 
     conn.close()
 
