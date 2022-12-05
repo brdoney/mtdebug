@@ -1,0 +1,9 @@
+.thread-picker table {
+  margin: 0.5em;
+}
+.thread-picker table td {
+  padding: 0.5em;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+  font-size: 0.8em;
+}

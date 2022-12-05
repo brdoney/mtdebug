@@ -1,3 +1,5 @@
+import "./ThreadPicker.css";
+
 import useSWR from "swr";
 import React from "react";
 
@@ -28,7 +30,6 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
       ))
     );
     if (thread != null) {
-      console.log(thread);
       variables = threads[thread]["vars"].map((v) => (
         <tr key={v.name}>
           <td>{v.type}</td>
@@ -39,13 +40,26 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
     }
   }
 
+  const table = (
+    <table>
+      <thead>
+        <tr>
+          <th data-prop-name="type">Type</th>
+          <th data-prop-name="name">Name</th>
+          <th data-prop-name="value">Value</th>
+        </tr>
+      </thead>
+      <tbody>{variables}</tbody>
+    </table>
+  );
+
   const handleChange = (e) => {
     const tid = e.target.value;
     setThread(tid);
   };
 
   return (
-    <div id="threadPicker">
+    <div class="thread-picker">
       <select
         disabled={!haveThreads}
         name="thread"
@@ -56,16 +70,7 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
       >
         {options}
       </select>
-      <table>
-        <thead>
-          <tr>
-            <th data-prop-name="type">Type</th>
-            <th data-prop-name="name">Name</th>
-            <th data-prop-name="value">Value</th>
-          </tr>
-        </thead>
-        <tbody>{variables}</tbody>
-      </table>
+      {variables.length > 0 ? table : ""}
     </div>
   );
 }
