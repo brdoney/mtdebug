@@ -151,24 +151,36 @@ def threads():
     res = cast(GdbResponse, all_res)
     res = get_result(res)
 
-    """
-    threads = res["payload"]["threads"]
+    json_threads = {}
+
+    curr_threads = res["payload"]["threads"]
     if res["message"] != "done":
         raise InternalServerError("Could not fetch threads")
     if res["payload"]["threads"] != []:
-        for thread in threads:
+        # iterate through list of threads
+        for thread in curr_threads:
             curr_vars = []
             tid = int(thread["id"])
-            output = cast(GdbResponse, gdbmi.write(
-            f"-stack-list-variables --thread {tid} --frame 0 --all-values"))[0]
-            output_list = output["payload"]["variables"]
-            for vars in output_list:
-                for var in vars:
-                    if var != 'none':
-                        curr_vars.append(var)
-            json_threads.append({"tid":tid, "vars": curr_vars, "target-id":thread["target-id"]})
-    """
-    return res["payload"]["threads"]
+            # get local variables from current frame
+            output = cast(
+                GdbResponse,
+                gdbmi.write(
+                    f"-stack-list-locals --thread {tid} --frame 0 --simple-values"
+                ),
+            )[0]
+
+            if "locals" in output["payload"]:
+                output_list = output["payload"]["locals"]
+                for vars in output_list:
+                    if vars != "none":
+                        curr_vars.append(vars)
+                        print(vars)
+            json_threads[tid] = {
+                "vars": curr_vars,
+                "target-id": thread["target-id"],
+            }
+
+    return json_threads
 
 
 @app.route("/api/resources")
