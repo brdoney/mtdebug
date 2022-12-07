@@ -128,8 +128,9 @@ def step_info(thread_id: int):
         # print current line of execution
         if res["message"] != "error":
             frame = res["payload"]["frame"]
+            fullname = frame["fullname"]
             num = int(frame["line"])
-            line = linecache.getline("./examples/multithread-demo.c", num)
+            line = linecache.getline(fullname, num)
     except Exception:
         # TODO: Slim down what we're catching to just be what is raised
         # command not running
