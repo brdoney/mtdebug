@@ -2,8 +2,7 @@ import "./ThreadPicker.css";
 
 import useSWR from "swr";
 import React from "react";
-
-const fetcher = (...args) => fetch(...args).then((res) => res.json());
+import { fetcher } from "./common";
 
 export default function ThreadPicker({ thread, setThread, ...args }) {
   const { data: threads, error } = useSWR("/api/threads", fetcher);
@@ -59,7 +58,7 @@ export default function ThreadPicker({ thread, setThread, ...args }) {
   };
 
   return (
-    <div class="thread-picker">
+    <div className="thread-picker">
       <select
         disabled={!haveThreads}
         name="thread"

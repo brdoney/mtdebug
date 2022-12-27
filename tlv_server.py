@@ -5,7 +5,9 @@ import struct
 import dataclasses
 from typing import Optional
 
-TLV_LEN = 16
+from flask.json.provider import JSONProvider
+
+TLV_LEN = 64
 TLV_PREFIX_LEN = struct.calcsize("!ii")
 TLV_MESSAGE_LEN = TLV_LEN - TLV_PREFIX_LEN
 print(TLV_LEN, TLV_PREFIX_LEN, TLV_MESSAGE_LEN)
@@ -17,6 +19,7 @@ __server: Optional[socket.socket] = None
 class TLVTag(enum.Enum):
     MUTEX_LOCK = 0
     MUTEX_UNLOCK = 1
+    MUTEX_CLAIM = 2
 
 
 @dataclasses.dataclass
@@ -26,13 +29,22 @@ class TLVMessage:
     value: str
 
 
+@dataclasses.dataclass
+class LibcAction:
+    tag: TLVTag
+    thread: int
+    address: str
+
+
 def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
     tag: int
     length: int
     value: bytes
     (tag, length, value) = struct.unpack(f"!ii{TLV_MESSAGE_LEN}s", message)
 
-    if remaining_len is not None:
+    if length < TLV_MESSAGE_LEN:
+        value = value[:length]
+    elif remaining_len is not None:
         value = value[:remaining_len]
 
     str_value = value.decode("ascii")
@@ -42,7 +54,7 @@ def __parse_tlv(message: bytes, remaining_len=None) -> TLVMessage:
     return TLVMessage(tlv_tag, length, str_value)
 
 
-def recv_tlv() -> TLVMessage:
+def recv_tlv(json: JSONProvider) -> LibcAction:
     # Start the server if it wasn't already started
     if __server is None:
         __open_socket()
@@ -72,10 +84,12 @@ def recv_tlv() -> TLVMessage:
         else:
             length_remaining -= TLV_MESSAGE_LEN
             message += tlv.value
+        tag = tlv.tag
 
     conn.close()
 
-    return TLVMessage(tag, full_length, message)
+    msg_json = json.loads(message)
+    return LibcAction(tag, msg_json["thread"], msg_json["address"])
 
 
 def __open_socket():
@@ -85,9 +99,11 @@ def __open_socket():
         return
 
     if os.path.exists("/tmp/socket_test.s"):
-        os.remove("/tmp/socket_test.s")
+        os.unlink("/tmp/socket_test.s")
 
     __server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    __server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    __server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     __server.bind("/tmp/socket_test.s")
 
     __server.listen(1)

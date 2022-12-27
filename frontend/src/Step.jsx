@@ -1,7 +1,5 @@
 import useSWR from "swr";
-import { useWriteGdb } from "./common";
-
-const fetcher = (...args) => fetch(...args).then((res) => res.json());
+import { fetcher, useWriteGdb } from "./common";
 
 export default function Step({ thread }) {
   const { postJson } = useWriteGdb(thread);

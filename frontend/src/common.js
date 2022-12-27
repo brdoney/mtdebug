@@ -1,9 +1,12 @@
 import { useSWRConfig } from "swr";
 
+export const fetcher = (...args) => fetch(...args).then((res) => res.json());
+
 export function useWriteGdb(selectedThreadId) {
   const { mutate } = useSWRConfig();
 
   const invalidateCache = () => {
+    mutate("/api/resources");
     mutate("/api/threads");
     if (selectedThreadId !== undefined) {
       mutate(`/api/step/${selectedThreadId}`);

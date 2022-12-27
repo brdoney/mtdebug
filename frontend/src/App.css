@@ -1,20 +1,16 @@
 body {
-  background-color: #282c34;
+  background-color: #1c1f24;
 }
 
 .App {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  gap: 10px;
+  gap: 1em;
 }
 
 .terminal {
   height: 70vh;
-}
-
-.start-button {
-  margin-bottom: 1em;
 }
 
 .controls {

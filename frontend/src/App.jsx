@@ -3,6 +3,7 @@ import GDBTerminal from "./Terminal";
 import ThreadWindow from "./ThreadWindow";
 import BreakpointForm from "./BreakpointForm";
 import StartButton from "./StartButton";
+import MutexView from "./MutexView";
 
 function App() {
   return (
@@ -11,9 +12,8 @@ function App() {
 
       <div className="controls">
         <BreakpointForm />
-        <div className="start-button">
-          <StartButton />
-        </div>
+        <StartButton />
+        <MutexView />
 
         <div className="windows">
           <ThreadWindow />

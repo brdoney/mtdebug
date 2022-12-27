@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <asm-generic/socket.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -18,7 +19,7 @@
 
 static int __socketfd = -1;
 
-#define TLV_LEN 16
+#define TLV_LEN 64
 #define TLV_PREFIX_LEN (sizeof(enum tlv_tag) + sizeof(int))
 #define TLV_MESSAGE_LEN TLV_LEN - TLV_PREFIX_LEN
 
@@ -45,6 +46,16 @@ static int get_socket() {
   if (__socketfd == -1) {
     perror("socket() failed");
     goto err;
+  }
+
+  const int enable = 1;
+  if (setsockopt(__socketfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) <
+      0) {
+    perror("setsockopt(SO_REUSEADDR) failed");
+  }
+  if (setsockopt(__socketfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) <
+      0) {
+    perror("setsockopt(SO_REUSEPORT) failed");
   }
 
   // Get the server address in order
@@ -84,13 +95,14 @@ int send_message(enum tlv_tag tag, int length, void *value) {
   for (int i = 0; i < length; i += TLV_MESSAGE_LEN) {
     msg.length = htonl(length);
 
-    int msglen = (length - i) > TLV_MESSAGE_LEN ? TLV_MESSAGE_LEN : length;
+    int msglen =
+        (length - i) > TLV_MESSAGE_LEN ? TLV_MESSAGE_LEN : (length - i);
+    memset(msg.value, 0, TLV_MESSAGE_LEN);
     memcpy(msg.value, value + i, msglen);
 
-    char buffer[msglen + 1];
-    memcpy(&buffer, &msg.value, msglen);
-    buffer[msglen] = '\0';
-    printf("Sending '%s' %lu\n", buffer, sizeof(msg));
+    write(STDOUT_FILENO, "Sending '", 9);
+    write(STDOUT_FILENO, &msg.value, msglen);
+    write(STDOUT_FILENO, "'\n", 2);
 
     int rc = send(sock, &msg, sizeof(msg), 0);
     if (rc != 0) {
@@ -102,4 +114,3 @@ int send_message(enum tlv_tag tag, int length, void *value) {
 
   return -1;
 }
-

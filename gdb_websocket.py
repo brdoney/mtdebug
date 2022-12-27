@@ -45,6 +45,7 @@ class GdbController:
             "set pagination off",
             "set non-stop on",
             "set debuginfod enabled on",
+            "set exec-wrapper env 'LD_PRELOAD=./libc-intercept.so'"
         ]
         startup_commands_str = [f"-iex={c}" for c in startup_commands]
         command = [*DEFAULT_GDB_LAUNCH_COMMAND, *startup_commands_str]
